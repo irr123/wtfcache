@@ -12,24 +12,21 @@ func Test(t *testing.T) {
 		iterations = 101
 	)
 
-	var c = New[int, int](limit)
+	var c = New[int, int]().MakeWithLock(limit)
 
 	for i := 0; i < iterations; i++ {
 		c.Set(i, i)
 	}
 
-	if c.ll.Len() != limit {
-		t.Fatalf("1, %v/%v", c.ll.Len(), len(c.dict))
-	}
-	if len(c.dict) != limit {
-		t.Fatalf("2, %v/%v", c.ll.Len(), len(c.dict))
+	if len(c.lru.dict) != limit {
+		t.Fatalf("1, %v != %v", limit, len(c.lru.dict))
 	}
 
 	for i := 0; i < iterations; i++ {
 		if i < iterations-limit {
 			v, ok := c.Get(i)
 			if ok {
-				t.Fatalf("3, %v = %v, (%v/%v)", i, v, c.ll.Len(), len(c.dict))
+				t.Fatalf("3, %v = %v, (%v)", i, v, len(c.lru.dict))
 			}
 
 			continue
@@ -37,18 +34,18 @@ func Test(t *testing.T) {
 
 		v, ok := c.Get(i)
 		if !ok {
-			t.Fatalf("4, %v = %v, (%v/%v)", i, v, c.ll.Len(), len(c.dict))
+			t.Fatalf("4, %v = %v, (%v)", i, v, len(c.lru.dict))
 		}
 
 		if v != i {
-			t.Fatalf("5, %v = %v, (%v/%v)", i, v, c.ll.Len(), len(c.dict))
+			t.Fatalf("5, %v = %v, (%v)", i, v, len(c.lru.dict))
 		}
 
 		c.Del(i)
 	}
 
-	if c.ll.Len() != 0 {
-		t.Fatalf("6, %v/%v", c.ll.Len(), len(c.dict))
+	if len(c.lru.dict) != 0 {
+		t.Fatalf("6, %v", len(c.lru.dict))
 	}
 }
 
@@ -58,7 +55,7 @@ func Example() {
 		value struct{ V int }
 	)
 
-	var c = New[key, value](3)
+	var c = New[key, value]().MakeWithLock(3)
 
 	c.Set(key{"one"}, value{1})
 	c.Set(key{"two"}, value{2})
@@ -71,26 +68,27 @@ func Example() {
 	c.Set(key{"seven"}, value{7})
 	c.Del(key{"seven"})
 
-	fmt.Printf("dict: %d\n", len(c.dict))
-	values := make([]string, 0, len(c.dict))
-	for k, v := range c.dict {
-		values = append(values, fmt.Sprintf(`"%v: %v"`, k, v.Value))
+	fmt.Printf("dict: %d\n", len(c.lru.dict))
+	values := make([]string, 0, len(c.lru.dict))
+	for k, v := range c.lru.dict {
+		values = append(values, fmt.Sprintf(`"%v: %v"`, k, v.v))
 	}
 
 	sort.Slice(values, func(i, j int) bool { return values[i] < values[j] })
 
-	fmt.Printf("%v\nlist: %d\n", values, c.ll.Len())
-	elem := c.ll.Back()
+	fmt.Printf("%v\nlist: %d\n", values, len(c.lru.dict))
+	elem := c.lru.ll.Last()
 	for elem != nil {
-		fmt.Printf("%v\n", elem.Value)
-		c.ll.Remove(elem)
-		elem = c.ll.Back()
+		fmt.Printf(`"%v: %v"`+"\n", elem.k, elem.v)
+		c.lru.ll.Del(elem)
+		elem = c.lru.ll.Last()
 	}
 
 	// Output:
 	// dict: 2
-	// ["{5}: {{5} {5}}" "{six}: {{six} {6}}"]
+	// ["{5}: {5}" "{six}: {6}"]
 	// list: 2
-	// {{5} {5}}
-	// {{six} {6}}
+	// "{5}: {5}"
+	// "{six}: {6}"
+	// "<nil>: {0}"
 }
