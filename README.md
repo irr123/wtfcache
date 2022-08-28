@@ -30,5 +30,17 @@ func main() {
 
 ## Here is some benchmarks:
 
- - https://github.com/irr123/go-cache-benchmark/tree/wtfcache
+ - https://github.com/vmihailenco/go-cache-benchmark
  - https://github.com/irr123/go-cache-benchmark-1/tree/wtf
+
+```
+$ go test -bench=. -benchmem
+goos: linux
+goarch: amd64
+pkg: github.com/irr123/wtfcache
+cpu: 12th Gen Intel(R) Core(TM) i9-12900H
+BenchmarkWTF/Set-20             23604550                49.69 ns/op           15 B/op          1 allocs/op
+BenchmarkWTF/Get-20             86443056                14.10 ns/op            0 B/op          0 allocs/op
+PASS
+ok      github.com/irr123/wtfcache      2.466s
+```

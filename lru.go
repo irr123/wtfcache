@@ -1,10 +1,17 @@
 package wtfcache
 
-import "sync"
+import (
+	"fmt"
+	"strings"
+	"sync"
+)
 
 var (
-	_ cache[uint, string] = new(LRU[uint, string])
-	_ cache[uint, string] = new(LRUWithLock[uint, string])
+	_ cache[fmt.Stringer, string] = new(LRU[fmt.Stringer, string])
+	_ cache[fmt.Stringer, string] = new(LRUWithLock[fmt.Stringer, string])
+
+	_ fmt.Stringer = new(LRU[uint, string])
+	_ fmt.Stringer = new(LRUWithLock[uint, string])
 )
 
 type (
@@ -65,8 +72,12 @@ func (c *LRUWithLock[K, V]) Del(k K) {
 	c.mu.Unlock()
 }
 
+func (c *LRUWithLock[K, V]) String() string {
+	return c.lru.String()
+}
+
 func (f *Fab[K, V]) Make(limit int) *LRU[K, V] {
-	var ll = linkedList[V]{root: new(element[V])}
+	ll := linkedList[V]{root: new(element[V])}
 	ll.root.next = ll.root
 	ll.root.prev = ll.root
 
@@ -79,33 +90,37 @@ func (f *Fab[K, V]) Make(limit int) *LRU[K, V] {
 }
 
 func (c *LRU[K, V]) Set(k K, v V) {
-	if e, ok := c.dict[k]; ok {
+	e, ok := c.dict[k]
+	if ok {
 		c.ll.Move(e)
+		e.v = v
 		return
 	}
 
 	if len(c.dict) > c.limit {
-		last := c.ll.Last()
-		c.ll.Del(last)
-		delete(c.dict, last.k)
-		c.fab.Put(last)
+		e = c.ll.Last()
+		delete(c.dict, e.k)
+		e.k, e.v = k, v
+		c.ll.Move(e)
+		c.dict[k] = e
+		return
 	}
 
-	var elem = c.fab.Get()
-	elem.k, elem.v = k, v
-	c.ll.Push(elem)
-	c.dict[k] = elem
+	e = c.fab.Get()
+	e.k, e.v = k, v
+	c.ll.Push(e)
+	c.dict[k] = e
 }
 
-func (c *LRU[K, V]) Get(k K) (nilVal V, _ bool) {
+func (c *LRU[K, V]) Get(k K) (zero V, _ bool) {
 	e, ok := c.dict[k]
 	if !ok {
-		return nilVal, false
+		return zero, false
 	}
 
 	c.ll.Move(e)
 
-	return e.v, ok
+	return e.v, true
 }
 
 func (c *LRU[K, V]) Del(k K) {
@@ -117,6 +132,28 @@ func (c *LRU[K, V]) Del(k K) {
 	c.ll.Del(e)
 	delete(c.dict, k)
 	c.fab.Put(e)
+}
+
+func (c *LRU[K, V]) String() string {
+	var (
+		count int
+		res   = make([]string, 0, len(c.dict))
+	)
+	for e := c.ll.Last(); e.next != c.ll.root.next; e = e.prev {
+		count++
+		if _, ok := c.dict[e.k]; ok {
+			res = append(res, fmt.Sprintf("%v:%v", e.k, e.v))
+		} else {
+			res = append(res, fmt.Sprintf("(missed)%v:%v", e.k, e.v))
+		}
+	}
+
+	ret := strings.Join(res, ", ")
+	if count != len(c.dict) {
+		ret = "! " + ret
+	}
+
+	return ret
 }
 
 func (ll linkedList[V]) Push(e *element[V]) {

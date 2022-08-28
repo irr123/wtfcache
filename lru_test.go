@@ -2,11 +2,10 @@ package wtfcache
 
 import (
 	"fmt"
-	"sort"
 	"testing"
 )
 
-func Test(t *testing.T) {
+func TestCommon(t *testing.T) {
 	const (
 		limit      = 9
 		iterations = 101
@@ -49,7 +48,60 @@ func Test(t *testing.T) {
 	}
 }
 
+func TestResetExistingKey(t *testing.T) {
+	var c = New[int, int]().MakeWithLock(10)
+
+	c.Set(1, 2)
+	c.Set(1, 3)
+
+	v, ok := c.Get(1)
+	if !ok {
+		t.Fatalf("1, %v", ok)
+	}
+
+	if v != 3 {
+		t.Fatalf("2, %v != 3", v)
+	}
+}
+
+func TestDelFromEmpty(t *testing.T) {
+	var c = New[int, int]().MakeWithLock(10)
+
+	c.Del(1)
+}
+
 func Example() {
+	var c = New[int, struct{}]().MakeWithLock(10)
+	fmt.Println(c.String())
+
+	// Output:
+	//
+}
+
+func ExampleLRU_String() {
+	var c = New[int, struct{}]().Make(10)
+
+	c.Set(0, struct{}{})
+	c.Set(1, struct{}{})
+	c.Set(2, struct{}{})
+	c.Set(3, struct{}{})
+	c.Set(4, struct{}{})
+	c.Set(5, struct{}{})
+	c.Set(6, struct{}{})
+	c.Set(7, struct{}{})
+	c.Set(8, struct{}{})
+	c.Set(9, struct{}{})
+	c.Set(0, struct{}{})
+
+	fmt.Printf("len: %d\n", len(c.dict))
+	fmt.Println(c.String())
+
+	// Output:
+	// len: 10
+	// 1:{}, 2:{}, 3:{}, 4:{}, 5:{}, 6:{}, 7:{}, 8:{}, 9:{}, 0:{}
+}
+
+func ExampleLRUWithLock_String() {
 	type (
 		key   struct{ K string }
 		value struct{ V int }
@@ -68,27 +120,45 @@ func Example() {
 	c.Set(key{"seven"}, value{7})
 	c.Del(key{"seven"})
 
-	fmt.Printf("dict: %d\n", len(c.lru.dict))
-	values := make([]string, 0, len(c.lru.dict))
-	for k, v := range c.lru.dict {
-		values = append(values, fmt.Sprintf(`"%v: %v"`, k, v.v))
-	}
-
-	sort.Slice(values, func(i, j int) bool { return values[i] < values[j] })
-
-	fmt.Printf("%v\nlist: %d\n", values, len(c.lru.dict))
-	elem := c.lru.ll.Last()
-	for elem != nil {
-		fmt.Printf(`"%v: %v"`+"\n", elem.k, elem.v)
-		c.lru.ll.Del(elem)
-		elem = c.lru.ll.Last()
-	}
+	fmt.Printf("len: %d\n", len(c.lru.dict))
+	fmt.Println(c.String())
 
 	// Output:
-	// dict: 2
-	// ["{5}: {5}" "{six}: {6}"]
-	// list: 2
-	// "{5}: {5}"
-	// "{six}: {6}"
-	// "<nil>: {0}"
+	// len: 2
+	// {5}:{5}, {six}:{6}
+}
+
+func ExampleLRU_Del() {
+	var c = New[int, struct{}]().Make(3)
+
+	c.Set(0, struct{}{})
+	c.Set(1, struct{}{})
+	c.Set(2, struct{}{})
+	delete(c.dict, 1)
+
+	fmt.Printf("len: %d\n", len(c.dict))
+	fmt.Println(c.String())
+
+	// Output:
+	// len: 2
+	// ! 0:{}, (missed)1:{}, 2:{}
+}
+
+func BenchmarkWTF(b *testing.B) {
+	cache := New[int, int]().MakeWithLock(b.N)
+
+	b.Run("Set", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			cache.Set(i, i)
+		}
+	})
+
+	b.Run("Get", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			value, ok := cache.Get(i)
+			if ok {
+				_ = value
+			}
+		}
+	})
 }

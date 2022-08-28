@@ -8,7 +8,7 @@ lint:
 .PHONY: fmt
 fmt:
 	find . -type f \( -name "*.go" ! -path "$(PWD)/vendor/*" \) \
-		-exec goimports -w -local sprapp {} \;
+		-exec goimports -w -local github.com/irr123/wtfcache {} \;
 
 .PHONY: tools
 tools:
